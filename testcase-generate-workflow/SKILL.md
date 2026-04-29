@@ -96,12 +96,23 @@ date +%Y%m%d_%H%M
 
 **逐个执行**：每个step启动一个sub-agent，等待完成后检查输出文件，再启动下一个。
 
-**检查点**：每个step完成后验证输出文件存在且非空（大小>0）。
+**检查点**：每个step完成后验证输出文件存在且非空（大小>0）。检查命令：
+```bash
+ls -la ~/.openclaw/workspace/<taskId>/
+```
 
 **错误处理**：
 - sub-agent执行失败 → 记录错误，询问用户重试或跳过
 - 文件缺失 → 终止并报告
 
-## 使用方式
-
-触发后按上述步骤执行，输入设计文档路径和rule_split_analysis.json路径。
+**任务文件夹结构**：
+```
+~/.openclaw/workspace/<taskId>/
+├── doc.md                      # 预处理后的设计文档
+├── rule_split_analysis.json    # 输入的规则拆分结果
+├── atomic-capability.json      # Step 1产出
+├── logic_testpoint.json        # Step 2产出
+├── interface_testpoint.json    # Step 3产出
+├── logic_testcase.json         # Step 4a产出
+└── interface_testcase.json     # Step 4b产出
+```

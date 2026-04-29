@@ -1,50 +1,33 @@
-# Test Generation Workflow - 详细说明
+# Test Generation Workflow - 工作流详细说明
 
 ## 工作流阶段
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ Step 0: 初始化                                              │
-│   - 生成任务ID: task_YYYYMMDD_HHMM                          │
-│   - 创建文件夹: ~/.openclaw/workspace/<taskId>/              │
-│   - 文档预处理: docx → doc.md 或 直接复制md                   │
-│   - 复制 rule_split_analysis.json 到任务文件夹                │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│ Step 1: atomic-capability-with-ibo-extraction               │
-│   输入: doc.md + rule_split_analysis.json                    │
-│   输出: atomic-capability.json                               │
-│   Agent: test_designer (sub-agent)                           │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│ Step 2: feature-tree-testpoint-generation                   │
-│   输入: atomic-capability.json                               │
-│   输出: logic_testpoint.json                                 │
-│   Agent: test_designer (sub-agent)                           │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│ Step 3: implement-testpoint-generation-workflow              │
-│   输入: doc.md                                               │
-│   输出: interface_testpoint.json                             │
-│   Agent: test_designer (sub-agent)                           │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│ Step 4a: testpoint-to-testcase (logic)                      │
-│   输入: logic_testpoint.json                                 │
-│   输出: logic_testcase.json                                  │
-│   Agent: test_designer (sub-agent)                           │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│ Step 4b: testpoint-to-testcase (interface)                  │
-│   输入: interface_testpoint.json                             │
-│   输出: interface_testcase.json                              │
-│   Agent: test_designer (sub-agent)                           │
-└─────────────────────────────────────────────────────────────┘
+Step 0: 初始化
+  - 生成任务ID: task_YYYYMMDD_HHMM
+  - 创建文件夹: ~/.openclaw/workspace/<taskId>/
+  - 文档预处理: docx → doc.md 或 直接复制md
+  - 复制 rule_split_analysis.json 到任务文件夹
+
+Step 1: atomic-capability-with-ibo-extraction
+  输入: doc.md + rule_split_analysis.json
+  输出: atomic-capability.json
+
+Step 2: feature-tree-testpoint-generation
+  输入: atomic-capability.json
+  输出: logic_testpoint.json
+
+Step 3: implement-testpoint-generation-workflow
+  输入: doc.md
+  输出: interface_testpoint.json
+
+Step 4a: testpoint-to-testcase (logic)
+  输入: logic_testpoint.json
+  输出: logic_testcase.json
+
+Step 4b: testpoint-to-testcase (interface)
+  输入: interface_testpoint.json
+  输出: interface_testcase.json
 ```
 
 ## 文件格式规范
@@ -113,16 +96,16 @@
 
 ## Agent配置
 
-| Step | Agent ID | Skill |
-|------|----------|-------|
+| Step | Agent | Skill |
+|------|-------|-------|
 | Step 0 | main (self) | word-to-markdown (if needed) |
 | Step 1 | test_designer | atomic-capability-with-ibo-extraction |
 | Step 2 | test_designer | feature-tree-testpoint-generation |
 | Step 3 | test_designer | implement-testpoint-generation-workflow |
 | Step 4 | test_designer | testpoint-to-testcase |
 
-## 监控命令
+## 监控任务状态
 
 ```bash
-python3 ~/.openclaw/workspace/skills/test-generation-workflow-orchestrator/scripts/workflow_monitor.py <taskId>
+ls -la ~/.openclaw/workspace/<taskId>/
 ```
