@@ -1,0 +1,173 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.3.23",
+    "lastTouchedAt": "2026-04-29T17:23:58.105Z"
+  },
+  "wizard": {
+    "lastRunAt": "2026-04-28T16:19:38.220Z",
+    "lastRunVersion": "2026.3.23",
+    "lastRunCommand": "onboard",
+    "lastRunMode": "local"
+  },
+  "auth": {
+    "profiles": {
+      "minimax:cn": {
+        "provider": "minimax",
+        "mode": "api_key"
+      }
+    }
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "minimax": {
+        "baseUrl": "https://api.minimaxi.com/anthropic",
+        "api": "anthropic-messages",
+        "authHeader": true,
+        "models": [
+          {
+            "id": "MiniMax-M2.7",
+            "name": "MiniMax M2.7",
+            "reasoning": true,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0.3,
+              "output": 1.2,
+              "cacheRead": 0.06,
+              "cacheWrite": 0.375
+            },
+            "contextWindow": 20000,
+            "maxTokens": 131072
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "minimax/MiniMax-M2.7"
+      },
+      "models": {
+        "minimax/MiniMax-M2.7": {
+          "alias": "Minimax"
+        }
+      },
+      "workspace": "/home/admin/.openclaw/workspace",
+      "compaction": {
+        "mode": "safeguard"
+      },
+      "maxConcurrent": 4,
+      "subagents": {
+        "maxConcurrent": 8
+      }
+    },
+    "list": [
+      {
+        "id": "main"
+      },
+      {
+        "id": "scholar_assistant",
+        "name": "scholar_assistant",
+        "workspace": "/home/admin/.openclaw/agents/scholar_assistant/workspace",
+        "agentDir": "/home/admin/.openclaw/agents/scholar_assistant/agent"
+      }
+    ]
+  },
+  "tools": {
+    "profile": "full"
+  },
+  "bindings": [
+    {
+      "agentId": "main",
+      "match": {
+        "channel": "feishu",
+        "accountId": "main"
+      }
+    },
+    {
+      "agentId": "scholar_assistant",
+      "match": {
+        "channel": "feishu",
+        "accountId": "scholar_assistant"
+      }
+    }
+  ],
+  "messages": {
+    "ackReactionScope": "group-mentions"
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
+  },
+  "channels": {
+    "feishu": {
+      "enabled": true,
+      "connectionMode": "websocket",
+      "domain": "feishu",
+      "groupPolicy": "open",
+      "dmPolicy": "open",
+      "allowFrom": [
+        "*"
+      ],
+      "accounts": {
+        "main": {
+          "appId": "cli_a97a6068f1b95bdf",
+          "appSecret": "1dOWxV0864Hh4pSYBii4nbfdNkHoh3Mv"
+        },
+        "scholar_assistant": {
+          "appId": "cli_a97892b2d3f8dbd3",
+          "appSecret": "Wndhjy4lL9CmwcK9P4m49fqEnwEViS5i"
+        }
+      }
+    }
+  },
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "loopback",
+    "auth": {
+      "mode": "token",
+      "token": "835444445bd31273caa8952df765b84b4b6d36ca5e14606c"
+    },
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    },
+    "nodes": {
+      "denyCommands": [
+        "camera.snap",
+        "camera.clip",
+        "screen.record",
+        "contacts.add",
+        "calendar.add",
+        "reminders.add",
+        "sms.send"
+      ]
+    }
+  },
+  "skills": {
+    "load": {
+      "extraDirs": [
+        "/home/admin/.openclaw/skills"
+      ]
+    }
+  },
+  "plugins": {
+    "allow": [
+      "feishu"
+    ],
+    "entries": {
+      "feishu": {
+        "enabled": true
+      }
+    }
+  }
+}
