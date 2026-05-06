@@ -1,0 +1,124 @@
+{
+  "steps": [
+    {
+      "id": 1,
+      "name": "需求格式化",
+      "agent": "requirement_analyst",
+      "dependsOn": [],
+      "skill": "word-to-markdown",
+      "inputFiles": ["{inputDoc}"],
+      "outputFiles": ["doc.md", "requirements.md"],
+      "branch": null
+    },
+    {
+      "id": 2,
+      "name": "客户问题识别",
+      "agent": "requirement_analyst",
+      "dependsOn": [1],
+      "skill": "requirement-analysis-decomposition",
+      "inputFiles": ["requirements.md"],
+      "outputFiles": ["sub_problems_5w2h.json", "sub_problems.json"],
+      "branch": null
+    },
+    {
+      "id": 3,
+      "name": "术语替换-5w2h",
+      "agent": "requirement_analyst",
+      "dependsOn": [2],
+      "skill": "term-dictionary",
+      "inputFiles": ["sub_problems_5w2h.json"],
+      "outputFiles": ["sub_problems_5w2h_replaced.json"],
+      "branch": null
+    },
+    {
+      "id": 4,
+      "name": "术语替换-subprob",
+      "agent": "requirement_analyst",
+      "dependsOn": [2],
+      "skill": "term-dictionary",
+      "inputFiles": ["sub_problems.json"],
+      "outputFiles": ["sub_problems_replaced.json"],
+      "branch": null
+    },
+    {
+      "id": 5,
+      "name": "规则拆分",
+      "agent": "requirement_analyst",
+      "dependsOn": [3, 4],
+      "skill": "rule-split",
+      "inputFiles": ["sub_problems_5w2h_replaced.json"],
+      "outputFiles": ["rules.json"],
+      "branch": null
+    },
+    {
+      "id": 6,
+      "name": "Usecase提取",
+      "agent": "requirement_analyst",
+      "dependsOn": [3, 4],
+      "skill": "usecase-extraction",
+      "inputFiles": ["sub_problems_5w2h_replaced.json"],
+      "outputFiles": ["usecase.json"],
+      "branch": null
+    },
+    {
+      "id": 7,
+      "name": "Usecase规则匹配",
+      "agent": "requirement_analyst",
+      "dependsOn": [5, 6],
+      "skill": "usecase-rule-matcher",
+      "inputFiles": ["usecase.json", "rules.json"],
+      "outputFiles": ["usecase_with_rule.json"],
+      "branch": null
+    },
+    {
+      "id": 8,
+      "name": "原子能力提取",
+      "agent": "test_designer",
+      "dependsOn": [7],
+      "skill": "atomic-capability-with-ibo-extraction",
+      "inputFiles": ["doc.md", "rules.json"],
+      "outputFiles": ["atomic_capability.json"],
+      "branch": 1
+    },
+    {
+      "id": 9,
+      "name": "逻辑测试点生成",
+      "agent": "test_designer",
+      "dependsOn": [8],
+      "skill": "feature-tree-testpoint-generation",
+      "inputFiles": ["atomic_capability.json"],
+      "outputFiles": ["logic_testpoint.json"],
+      "branch": 1
+    },
+    {
+      "id": 10,
+      "name": "逻辑测试用例生成",
+      "agent": "test_designer",
+      "dependsOn": [9],
+      "skill": "testpoint-to-testcase",
+      "inputFiles": ["logic_testpoint.json"],
+      "outputFiles": ["logic_testcase.json"],
+      "branch": 1
+    },
+    {
+      "id": 11,
+      "name": "接口测试点生成",
+      "agent": "test_designer",
+      "dependsOn": [7],
+      "skill": "implement-testpoint-generation-workflow",
+      "inputFiles": ["doc.md"],
+      "outputFiles": ["interface_testpoint.json"],
+      "branch": 2
+    },
+    {
+      "id": 12,
+      "name": "接口测试用例生成",
+      "agent": "test_designer",
+      "dependsOn": [11],
+      "skill": "testpoint-to-testcase",
+      "inputFiles": ["interface_testpoint.json"],
+      "outputFiles": ["interface_testcase.json"],
+      "branch": 2
+    }
+  ]
+}
