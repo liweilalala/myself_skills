@@ -12,6 +12,26 @@ import sys
 import os
 import platform
 from pathlib import Path
+import shutil
+
+SKILL_DIR = Path(__file__).parent.parent.resolve()
+SCRIPT_DIR = SKILL_DIR / "scripts"
+REFERENCES_DIR = SKILL_DIR / "references"
+REGISTRY_FILE = REFERENCES_DIR / "agent-registry.json"
+WORKSPACE = Path.home() / ".openclaw" / "workspace"
+TASK_RECORDS_DIR = WORKSPACE / "task_records"
+
+
+def get_openclaw_cmd():
+    """查找 openclaw 命令（跨平台）"""
+    cmd = shutil.which("openclaw")
+    if cmd:
+        return cmd
+    for name in ["openclaw.exe", "openclaw.cmd", "openclaw.bat"]:
+        cmd = shutil.which(name)
+        if cmd:
+            return cmd
+    return "openclaw"
 
 
 def get_home_dir():

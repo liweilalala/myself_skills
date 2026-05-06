@@ -10,6 +10,10 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
 
+SKILL_DIR = Path(__file__).parent.parent.resolve()
+SCRIPT_DIR = SKILL_DIR / "scripts"
+REFERENCES_DIR = SKILL_DIR / "references"
+REGISTRY_FILE = REFERENCES_DIR / "agent-registry.json"
 WORKSPACE = Path.home() / ".openclaw" / "workspace"
 TASK_RECORDS_DIR = WORKSPACE / "task_records"
 
