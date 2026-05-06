@@ -1,111 +1,93 @@
-# Test Generation Workflow - 工作流详细说明
+# 测试用例生成工作流 - 目录结构
 
-## 工作流阶段
+## 工作目录
 
 ```
-Step 0: 初始化
-  - 生成任务ID: task_YYYYMMDD_HHMM
-  - 创建文件夹: ~/.openclaw/workspace/<taskId>/
-  - 文档预处理: docx → doc.md 或 直接复制md
-  - 复制 rule_split_analysis.json 到任务文件夹
-
-Step 1: atomic-capability-with-ibo-extraction
-  输入: doc.md + rule_split_analysis.json
-  输出: atomic-capability.json
-
-Step 2: feature-tree-testpoint-generation
-  输入: atomic-capability.json
-  输出: logic_testpoint.json
-
-Step 3: implement-testpoint-generation-workflow
-  输入: doc.md
-  输出: interface_testpoint.json
-
-Step 4a: testpoint-to-testcase (logic)
-  输入: logic_testpoint.json
-  输出: logic_testcase.json
-
-Step 4b: testpoint-to-testcase (interface)
-  输入: interface_testpoint.json
-  输出: interface_testcase.json
+~/.openclaw/workspace/task_records/<task_id>/
+├── task_record.json              # 任务记录
+├── doc.md                        # Step1 输出
+├── requirements.md               # Step1 输出
+├── sub_problems_5w2h.json        # Step2 输出
+├── sub_problems.json             # Step2 输出
+├── sub_problems_5w2h_replaced.json   # Step3 输出
+├── sub_problems_replaced.json    # Step4 输出
+├── rules.json                    # Step5 输出
+├── usecase.json                  # Step6 输出
+├── usecase_with_rule.json        # Step7 输出
+├── atomic_capability.json        # Step8 输出
+├── logic_testpoint.json          # Step9 输出
+├── logic_testcase.json           # Step10 输出
+├── interface_testpoint.json      # Step11 输出
+└── interface_testcase.json       # Step12 输出
 ```
 
-## 文件格式规范
+## 文件传递依赖
 
-### atomic-capability.json
+```
+[Step1] doc.md, requirements.md
+  ↓
+[Step2] sub_problems_5w2h.json, sub_problems.json
+  ↓
+┌───────────────────────────────────┐
+│ Step3 (→ sub_problems_5w2h_replaced.json)  │
+│ Step4 (→ sub_problems_replaced.json)      │
+└───────────────────────────────────┘
+  ↓
+┌───────────────────────────────────┐
+│ Step5 (rules.json)                │
+│ Step6 (usecase.json)             │
+└───────────────────────────────────┘
+  ↓
+[Step7] usecase_with_rule.json
+  ↓
+┌───────────────────────────────────┐
+│ 分支1:                             │
+│ Step8  → atomic_capability.json   │
+│ Step9  → logic_testpoint.json     │
+│ Step10 → logic_testcase.json      │
+│                                    │
+│ 分支2:                             │
+│ Step11 → interface_testpoint.json  │
+│ Step12 → interface_testcase.json  │
+└───────────────────────────────────┘
+```
+
+## 绝对路径示例
+
+假设 task_id = `task_tcg_20260506_170000`，work_dir 如下：
+
+```
+/home/admin/.openclaw/workspace/task_records/task_tcg_20260506_170000/
+├── doc.md
+├── requirements.md
+├── sub_problems_5w2h.json
+├── sub_problems.json
+├── sub_problems_5w2h_replaced.json
+├── sub_problems_replaced.json
+├── rules.json
+├── usecase.json
+├── usecase_with_rule.json
+├── atomic_capability.json
+├── logic_testpoint.json
+├── logic_testcase.json
+├── interface_testpoint.json
+└── interface_testcase.json
+```
+
+## 派发信息示例
+
 ```json
 {
-  "capabilities": [
-    {
-      "id": "CAP-001",
-      "name": "能力名称",
-      "description": "能力描述",
-      "ibo": "独立构建块",
-      "testable": true
-    }
-  ]
+  "agentId": "requirement_analyst",
+  "stepId": 1,
+  "stepName": "需求格式化",
+  "skill": "word-to-markdown + requirement-document-preprocessor",
+  "inputFiles": ["/path/to/input.docx"],
+  "outputFiles": [
+    "/home/admin/.openclaw/workspace/task_records/task_tcg_20260506_170000/doc.md",
+    "/home/admin/.openclaw/workspace/task_records/task_tcg_20260506_170000/requirements.md"
+  ],
+  "workDir": "/home/admin/.openclaw/workspace/task_records/task_tcg_20260506_170000",
+  "taskRecordPath": "/home/admin/.openclaw/workspace/task_records/task_tcg_20260506_170000/task_record.json"
 }
-```
-
-### logic_testpoint.json
-```json
-{
-  "testpoints": [
-    {
-      "id": "TP-001",
-      "capability_id": "CAP-001",
-      "scenario": "测试场景",
-      "steps": ["步骤1", "步骤2"],
-      "expected": "预期结果"
-    }
-  ]
-}
-```
-
-### interface_testpoint.json
-```json
-{
-  "testpoints": [
-    {
-      "id": "ITP-001",
-      "interface": "接口名称",
-      "method": "GET/POST/PUT/DELETE",
-      "params": {},
-      "expected_response": {}
-    }
-  ]
-}
-```
-
-### logic_testcase.json / interface_testcase.json
-```json
-{
-  "testcases": [
-    {
-      "id": "TC-001",
-      "testpoint_id": "TP-001",
-      "title": "用例标题",
-      "preconditions": [],
-      "test_steps": ["步骤1", "步骤2"],
-      "expected_results": ["结果1", "结果2"],
-      "priority": "high/medium/low"
-    }
-  ]
-}
-```
-
-## Agent配置
-
-| Step | Agent | Skill |
-|------|-------|-------|
-| Step 0 | main (self) | word-to-markdown (if needed) |
-| Step 1 | test_designer | atomic-capability-with-ibo-extraction |
-| Step 2 | test_designer | feature-tree-testpoint-generation |
-| Step 3 | test_designer | implement-testpoint-generation-workflow |
-| Step 4 | test_designer | testpoint-to-testcase |
-
-## 监控任务状态
-
-```bash
-ls -la ~/.openclaw/workspace/<taskId>/
 ```
