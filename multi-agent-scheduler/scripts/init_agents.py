@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-init_agents.py - 初始化Agent列表
+init_agents.py - 初始化Agent列表（跨平台版本）
 用法: python3 init_agents.py
 功能:
   1. 调用 openclaw agents list 获取所有可用Agent
@@ -9,15 +9,60 @@ init_agents.py - 初始化Agent列表
 """
 
 import json
+import os
+import re
 import subprocess
 import sys
+import platform
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
+
+# 跨平台路径处理
+def get_home_dir():
+    """获取用户主目录，兼容Windows和Unix"""
+    if platform.system() == "Windows":
+        # Windows:优先用USERPROFILE，其次HOMEDRIVE+HOMEPATH
+        home = os.environ.get("USERPROFILE")
+        if not home:
+            home = os.environ.get("HOMEDRIVE", "") + os.environ.get("HOMEPATH", "")
+    else:
+        # Unix/Linux: 先尝试环境变量HOME，其次使用getpwuid
+        home = os.environ.get("HOME")
+        if not home:
+            try:
+                import pwd
+                home = pwd.getpwuid(os.getuid()).pw_dir
+            except Exception:
+                home = os.path.expanduser("~")
+    return home
+
+
+def get_openclaw_base():
+    """获取OpenClaw基础目录，兼容不同操作系统"""
+    home = get_home_dir()
+    if platform.system() == "Windows":
+        # Windows: %USERPROFILE%\.openclaw
+        return Path(home) / ".openclaw"
+    else:
+        # Unix/Linux/macOS: ~/.openclaw
+        return Path(home) / ".openclaw"
+
+
+def expand_path(path_str):
+    """展开路径中的~和环境变量"""
+    if not path_str:
+        return path_str
+    # 使用os.path.expanduser展开~（跨平台兼容）
+    path_str = os.path.expanduser(path_str)
+    # 展开环境变量
+    path_str = os.path.expandvars(path_str)
+    return path_str
+
 
 SKILL_DIR = Path(__file__).parent.parent.resolve()
 REFERENCES_DIR = SKILL_DIR / "references"
 REGISTRY_FILE = REFERENCES_DIR / "agent-registry.json"
-AGENTS_BASE_DIR = Path("/home/admin/.openclaw/agents")
+AGENTS_BASE_DIR = get_openclaw_base() / "agents"
 
 
 def get_gmt8_time():
@@ -28,9 +73,7 @@ def get_gmt8_time():
 
 def scan_agent_skills(workspace_path):
     """扫描指定Agent工作目录下的skills文件夹，返回技能列表"""
-    if workspace_path.startswith("~"):
-        workspace_path = workspace_path.replace("~", "/home/admin")
-    
+    workspace_path = expand_path(workspace_path)
     skills_dir = Path(workspace_path) / "skills"
     
     skills = []
@@ -47,7 +90,8 @@ def scan_agent_skills(workspace_path):
                         content = skill_md.read_text(encoding="utf-8")
                         # 获取description字段
                         for line in content.split("\n"):
-                            if line.strip().startswith("description:"):
+                            line_stripped = line.strip()
+                            if line_stripped.startswith("description:"):
                                 description = line.split("description:", 1)[1].strip().strip('"').strip("'")
                                 break
                     except Exception:
@@ -62,23 +106,68 @@ def scan_agent_skills(workspace_path):
     return skills
 
 
+def find_openclaw_cmd():
+    """查找openclaw命令路径"""
+    # 首先尝试直接调用（可能在PATH中）
+    cmd_name = "openclaw.exe" if platform.system() == "Windows" else "openclaw"
+    
+    # 使用shutil.which查找
+    import shutil
+    cmd_path = shutil.which(cmd_name)
+    if cmd_path:
+        return cmd_path
+    
+    # Windows上可能叫openclaw.cmd或openclaw.bat
+    if platform.system() == "Windows":
+        for name in ["openclaw.cmd", "openclaw.bat"]:
+            cmd_path = shutil.which(name)
+            if cmd_path:
+                return cmd_path
+    
+    # 返回命令名，让subprocess自己找
+    return "openclaw"
+
+
+def run_openclaw_agents_list():
+    """执行openclaw agents list命令"""
+    cmd = find_openclaw_cmd()
+    
+    # 根据系统选择shell参数
+    if platform.system() == "Windows":
+        # Windows: 使用cmd执行
+        result = subprocess.run(
+            [cmd, "agents", "list"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=30,
+            shell=True  # 使用shell确保.cmd/.bat可以找到
+        )
+    else:
+        # Unix/Linux/macOS
+        result = subprocess.run(
+            [cmd, "agents", "list"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=30
+        )
+    
+    if result.returncode != 0:
+        stderr = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
+        print(f"[错误] openclaw agents list 执行失败: {stderr}")
+        return None
+    
+    return result.stdout.decode("utf-8", errors="replace")
+
+
 def init_agents():
     """初始化Agent列表"""
     print("[初始化] 开始获取Agent列表...")
     
     # 调用 openclaw agents list
     try:
-        result = subprocess.run(
-            ["openclaw", "agents", "list"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=30
-        )
-        if result.returncode != 0:
-            print(f"[错误] openclaw agents list 执行失败: {result.stderr.decode('utf-8', errors='replace')}")
+        output = run_openclaw_agents_list()
+        if output is None:
             return False
-        
-        output = result.stdout.decode('utf-8', errors='replace')
         print(f"[信息] openclaw agents list 输出:\n{output}")
         
     except FileNotFoundError:
@@ -113,10 +202,17 @@ def init_agents():
             agent_line = line.strip()[2:]  # 去掉 "- "
             agent_id = agent_line.split()[0] if agent_line else ""
             name = agent_id
+            
+            # 构建工作目录路径（跨平台）
+            if platform.system() == "Windows":
+                workspace = str(get_openclaw_base() / "agents" / agent_id / "workspace")
+            else:
+                workspace = str(get_openclaw_base() / "agents" / agent_id / "workspace")
+            
             current_agent = {
                 "agentId": agent_id,
                 "name": name,
-                "workspace": f"/home/admin/.openclaw/agents/{agent_id}/workspace",
+                "workspace": workspace,
                 "status": "available",
                 "registeredAt": get_gmt8_time(),
                 "skills": [],
@@ -124,23 +220,27 @@ def init_agents():
             }
         
         # 解析Agent的属性行
-        elif current_agent is not None and line.strip().startswith("Workspace:"):
-            workspace = line.split("Workspace:", 1)[1].strip()
-            # 展开 ~ 路径
-            if workspace.startswith("~"):
-                workspace = workspace.replace("~", "/home/admin")
-            current_agent["workspace"] = workspace
-        
-        elif current_agent is not None and line.strip().startswith("Identity:"):
-            identity = line.split("Identity:", 1)[1].strip()
-            # 尝试提取名称（格式如 "✨ 小V (Xiao V)"）
-            if " (" in identity:
-                name_part = identity.split(" (")[0].strip()
-                # 去除emoji
-                import re
-                name_part = re.sub(r'[\U00010000-\U0010ffff]', '', name_part).strip()
-                if name_part:
-                    current_agent["name"] = name_part
+        elif current_agent is not None:
+            line_stripped = line.strip()
+            
+            if line_stripped.startswith("Workspace:"):
+                workspace = line.split("Workspace:", 1)[1].strip()
+                workspace = expand_path(workspace)
+                current_agent["workspace"] = workspace
+            
+            elif line_stripped.startswith("Identity:"):
+                identity = line.split("Identity:", 1)[1].strip()
+                # 尝试提取名称（格式如 "✨ 小V (Xiao V)"）
+                if " (" in identity:
+                    name_part = identity.split(" (")[0].strip()
+                    # 去除emoji（兼容不同Python版本）
+                    try:
+                        name_part = re.sub(r'[\U00010000-\U0010ffff]', '', name_part).strip()
+                    except Exception:
+                        # Python < 3.7 不支持高级Unicode范围，简单处理
+                        name_part = ''.join(c for c in name_part if ord(c) < 0x10000)
+                    if name_part:
+                        current_agent["name"] = name_part
     
     # 保存最后一个Agent
     if current_agent and current_agent.get("agentId"):
@@ -154,6 +254,7 @@ def init_agents():
     registry = {
         "version": "1.1",
         "updatedAt": get_gmt8_time(),
+        "platform": platform.system(),
         "agents": agents,
         "totalCount": len(agents)
     }

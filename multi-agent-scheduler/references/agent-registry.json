@@ -1,13 +1,14 @@
 {
   "version": "1.1",
-  "updatedAt": "2026-05-06 10:04 GMT+8",
+  "updatedAt": "2026-05-06 10:43 GMT+8",
+  "platform": "Linux",
   "agents": [
     {
       "agentId": "main",
       "name": "✨ 小V",
       "workspace": "/home/admin/.openclaw/workspace",
       "status": "available",
-      "registeredAt": "2026-05-06 10:04 GMT+8",
+      "registeredAt": "2026-05-06 10:43 GMT+8",
       "skills": [
         {
           "skillId": "test-generation-workflow",
@@ -52,7 +53,7 @@
       "name": "小研",
       "workspace": "/home/admin/.openclaw/agents/scholar_assistant/workspace",
       "status": "available",
-      "registeredAt": "2026-05-06 10:04 GMT+8",
+      "registeredAt": "2026-05-06 10:43 GMT+8",
       "skills": [
         {
           "skillId": "self-improvement-agent",
