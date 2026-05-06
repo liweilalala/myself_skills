@@ -27,20 +27,40 @@ description: 多Agent任务调度框架。当需要创建、管理、或监控�
 - 用户明确要求「初始化」
 
 **执行**：
-1. 调用 `agents_list` 获取所有可用 agent
-2. 保存到 `references/agent-registry.json`
+1. 调用 `openclaw agents list` 获取所有可用 agent
+2. 扫描每个 agent 工作目录下的 `skills/` 文件夹，记录可用技能
+3. 保存到 `references/agent-registry.json`
 
 **Agent注册表格式**：
 ```json
 {
-  "version": "1.0",
-  "updatedAt": "2026-04-30 19:47 GMT+8",
+  "version": "1.1",
+  "updatedAt": "2026-05-06 10:01 GMT+8",
   "agents": [
-    {"agentId": "scholar_assistant", "name": "学术助手", "status": "available"}
+    {
+      "agentId": "scholar_assistant",
+      "name": "学术助手",
+      "workspace": "/home/admin/.openclaw/agents/scholar_assistant/workspace",
+      "status": "available",
+      "registeredAt": "2026-05-06 10:01 GMT+8",
+      "skills": [
+        {
+          "skillId": "self-improvement-agent",
+          "description": "持续改进智能体",
+          "path": "/home/admin/.openclaw/agents/scholar_assistant/workspace/skills/self-improvement-agent"
+        }
+      ],
+      "skillCount": 1
+    }
   ],
   "totalCount": 1
 }
 ```
+
+**技能扫描逻辑**：
+- 遍历 `~/.openclaw/agents/<agentId>/workspace/skills/` 目录
+- 读取每个技能文件夹中的 `SKILL.md`，提取 `description` 字段
+- 记录技能ID、描述、路径到注册表
 
 ---
 
