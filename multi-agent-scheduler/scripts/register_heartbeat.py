@@ -1,21 +1,27 @@
 #!/usr/bin/env python3
 """
-register_heartbeat.py - 通过 OpenClaw cron 注册心跳监控
+register_heartbeat.py - 注册心跳监控
 用法: python3 register_heartbeat.py <task_record_json_path>
+
+此脚本通过 OpenClaw cron tool 注册心跳任务（由主Agent调用）。
+注册成功后，心跳每30秒触发 execute_task.py 检查任务状态。
 """
 
 import json
 import sys
-import subprocess
-import shutil
+import os
 from pathlib import Path
-from datetime import datetime, timezone
-
+from datetime import datetime, timezone, timedelta
 
 SKILL_DIR = Path(__file__).parent.parent.resolve()
 SCRIPT_PATH = SKILL_DIR / "scripts" / "execute_task.py"
 WORKSPACE = Path.home() / ".openclaw" / "workspace"
 TASK_RECORDS_DIR = WORKSPACE / "task_records"
+
+
+def gmt8_now():
+    tz = timezone(timedelta(hours=8))
+    return datetime.now(tz).strftime("%Y-%m-%d %H:%M GMT+8")
 
 
 def get_task_record(path):
@@ -31,57 +37,6 @@ def get_task_record(path):
         return None
 
 
-def get_openclaw_cmd():
-    """查找 openclaw 命令"""
-    cmd = shutil.which("openclaw")
-    if cmd:
-        return cmd
-    # Windows 变体
-    for name in ["openclaw.exe", "openclaw.cmd", "openclaw.bat"]:
-        cmd = shutil.which(name)
-        if cmd:
-            return cmd
-    return "openclaw"
-
-
-def register_cron_job(name, task_path, interval_ms=30000):
-    """通过 openclaw cron add 注册心跳任务"""
-    openclaw = get_openclaw_cmd()
-    
-    # 构建 cron job 配置
-    job_name = f"heartbeat_{name}"
-    
-    # 使用 agentTurn 模式，定时执行 execute_task.py
-    message = f"python3 {SCRIPT_PATH} {task_path}"
-    
-    # 调用 openclaw cron add
-    cmd = [
-        openclaw, "cron", "add",
-        "--name", job_name,
-        "--every", str(interval_ms),
-        "--message", message
-    ]
-    
-    print(f"[注册] 执行命令: {' '.join(cmd)}", flush=True)
-    
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        shell=False
-    )
-    
-    if result.returncode == 0:
-        print(f"[成功] 心跳任务已注册: {job_name}", flush=True)
-        print(result.stdout, flush=True)
-        return True
-    else:
-        print(f"[失败] 注册心跳任务失败", flush=True)
-        print(f"stdout: {result.stdout}", flush=True)
-        print(f"stderr: {result.stderr}", flush=True)
-        return False
-
-
 def main():
     if len(sys.argv) < 2:
         print("用法: python3 register_heartbeat.py <task_record_json_path>")
@@ -94,20 +49,29 @@ def main():
 
     task_id = record.get("id")
     task_name = record.get("name", task_id)
-    
-    print(f"[注册] 任务: {task_name} ({task_id})", flush=True)
-    print(f"[信息] 使用 OpenClaw cron 定时任务（每30秒心跳检查）", flush=True)
 
-    # 注册心跳 cron job
-    success = register_cron_job(task_id, task_path)
-    
-    if success:
-        print(f"\n[完成] 心跳监控已启动", flush=True)
-        print(f"提示: 使用 'openclaw cron list' 查看所有定时任务", flush=True)
-        print(f"      使用 'openclaw cron rm <job_id>' 停止心跳监控", flush=True)
-    else:
-        print(f"\n[错误] 心跳监控注册失败，请检查 openclaw cron 配置", flush=True)
-        sys.exit(1)
+    print(f"[注册] 任务: {task_name} ({task_id})")
+    print(f"[信息] 心跳间隔: 30秒")
+    print(f"[脚本] {SCRIPT_PATH}")
+    print(f"[任务] {task_path}")
+
+    # 输出 JSON 格式的配置信息，供主Agent使用 cron tool 注册
+    cron_config = {
+        "name": f"heartbeat_{task_id}",
+        "everyMs": 30000,
+        "script_path": str(SCRIPT_PATH),
+        "task_path": str(task_path),
+        "task_name": task_name
+    }
+
+    print(f"\n=== CRON_CONFIG ===")
+    print(json.dumps(cron_config, ensure_ascii=False, indent=2))
+    print(f"=== END_CRON_CONFIG ===")
+
+    print(f"\n[完成] 请使用 cron tool (action=add) 注册心跳任务")
+    print(f"提示: 主Agent应读取 === CRON_CONFIG === 块并调用 cron(tool)")
+
+    sys.exit(0)
 
 
 if __name__ == "__main__":

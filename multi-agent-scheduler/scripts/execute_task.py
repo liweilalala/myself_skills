@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """
-execute_task.py - 检查并继续执行任务
-用法: python3 execute_task.py <task_record_json_path> [--spawn]
+execute_task.py - 检查并更新任务状态
+用法: python3 execute_task.py <task_record_json_path> [--check-only]
 
-此脚本由主Agent的心跳调用，用于检查任务状态并决定是否需要派发下一个步骤。
-派发由主Agent通过 sessions_spawn 工具直接执行。
+此脚本由主Agent的心跳调用（或手动），用于检查任务状态。
+派发逻辑由主Agent根据任务记录中的信息直接执行。
+
+修复记录:
+  - 2026-05-07: 移除错误的派发输出设计
+  - 改用状态文件模式：更新任务记录中的 dispatches 数组
+  - 主Agent心跳时读取 dispatches 数组并执行派发
 """
 
 import json
@@ -12,43 +17,27 @@ import sys
 import os
 import platform
 from pathlib import Path
-import shutil
+from datetime import datetime, timezone, timedelta
 
 SKILL_DIR = Path(__file__).parent.parent.resolve()
-SCRIPT_DIR = SKILL_DIR / "scripts"
 REFERENCES_DIR = SKILL_DIR / "references"
 REGISTRY_FILE = REFERENCES_DIR / "agent-registry.json"
 WORKSPACE = Path.home() / ".openclaw" / "workspace"
 TASK_RECORDS_DIR = WORKSPACE / "task_records"
 
 
-def get_openclaw_cmd():
-    """查找 openclaw 命令（跨平台）"""
-    cmd = shutil.which("openclaw")
-    if cmd:
-        return cmd
-    for name in ["openclaw.exe", "openclaw.cmd", "openclaw.bat"]:
-        cmd = shutil.which(name)
-        if cmd:
-            return cmd
-    return "openclaw"
+def gmt8_now():
+    tz = timezone(timedelta(hours=8))
+    return datetime.now(tz).strftime("%Y-%m-%d %H:%M GMT+8")
 
 
-def get_home_dir():
-    """获取用户主目录"""
-    if platform.system() == "Windows":
-        home = os.environ.get("USERPROFILE")
-        if not home:
-            home = os.environ.get("HOMEDRIVE", "") + os.environ.get("HOMEPATH", "")
-    else:
-        home = os.environ.get("HOME")
-        if not home:
-            try:
-                import pwd
-                home = pwd.getpwuid(os.getuid()).pw_dir
-            except Exception:
-                home = os.path.expanduser("~")
-    return home
+def expand_path(path_str):
+    """展开路径中的~和环境变量"""
+    if not path_str:
+        return path_str
+    path_str = os.path.expanduser(path_str)
+    path_str = os.path.expandvars(path_str)
+    return path_str
 
 
 def get_task_record(task_path):
@@ -72,6 +61,16 @@ def save_task_record(task_path, record):
         return False
 
 
+def check_step_completed(step):
+    """检查步骤是否已完成（通过输出文件判断）"""
+    for out_path in step.get("output", {}).values():
+        if isinstance(out_path, str) and out_path:
+            expanded = expand_path(out_path)
+            if Path(expanded).exists():
+                return True
+    return False
+
+
 def get_next_pending_step(record):
     """获取下一个待执行的步骤（依赖已满足的）"""
     steps = record.get("steps", [])
@@ -92,33 +91,83 @@ def get_next_pending_step(record):
     return None
 
 
-def check_step_completed(step):
-    """检查步骤是否已完成（通过输出文件判断）"""
-    for out_path in step.get("output", {}).values():
-        if isinstance(out_path, str) and out_path:
-            expanded = os.path.expanduser(os.path.expandvars(out_path))
-            if Path(expanded).exists():
-                return True
-    return False
+def scan_pending_tasks():
+    """扫描所有待处理的任务（用于断点续跑）"""
+    if not TASK_RECORDS_DIR.exists():
+        return []
+
+    pending = []
+    for task_file in TASK_RECORDS_DIR.glob("*.json"):
+        record = get_task_record(task_file)
+        if not record:
+            continue
+
+        status = record.get("status", "unknown")
+        if status in ["in_progress", "pending"]:
+            # 检查是否有可执行的步骤
+            next_step = get_next_pending_step(record)
+            if next_step:
+                pending.append({
+                    "task_id": record.get("id"),
+                    "task_name": record.get("name"),
+                    "task_path": str(task_file),
+                    "status": status,
+                    "next_step": next_step
+                })
+            elif status == "in_progress":
+                # in_progress 但没有可执行步骤，可能是等待中
+                pending.append({
+                    "task_id": record.get("id"),
+                    "task_name": record.get("name"),
+                    "task_path": str(task_file),
+                    "status": "waiting",
+                    "next_step": None
+                })
+
+    return pending
 
 
 def main():
+    # 如果没有参数，扫描所有待处理任务（用于断点续跑）
     if len(sys.argv) < 2:
-        print("用法: python3 execute_task.py <task_record_json_path>")
-        sys.exit(1)
+        print("[扫描] 检查所有待处理任务...", flush=True)
+        pending = scan_pending_tasks()
+        if not pending:
+            print("[完成] 没有待处理的任务", flush=True)
+            sys.exit(0)
+
+        print(f"[发现] {len(pending)} 个待处理任务:", flush=True)
+        for p in pending:
+            step_info = f"步骤 {p['next_step']['id']}: {p['next_step']['name']}" if p['next_step'] else "等待中"
+            print(f"  - {p['task_id']} ({p['task_name']}) [{p['status']}] - {step_info}", flush=True)
+        sys.exit(0)
 
     task_path = Path(sys.argv[1])
+    check_only = "--check-only" in sys.argv
+
     record = get_task_record(task_path)
     if not record:
         sys.exit(1)
 
     task_id = record.get("id")
-    print(f"[检查] 任务 {task_id}，状态: {record.get('status')}", flush=True)
+    task_name = record.get("name", task_id)
 
-    # 任务已完成，无需处理
+    if check_only:
+        print(f"[检查] 任务 {task_id}，状态: {record.get('status')}", flush=True)
+        print(f"[步骤] {len(record.get('steps', []))} 个", flush=True)
+        print(f"[心跳] Agent: {record.get('heartbeatAgents', [])}", flush=True)
+        sys.exit(0)
+
+    print(f"[检查] 任务 {task_id} ({task_name})，状态: {record.get('status')}", flush=True)
+
+    # 任务已完成
     if record.get("status") == "completed":
         print("[完成] 任务已全部完成", flush=True)
         sys.exit(0)
+
+    # 初始化 dispatches 数组（如果不存在）
+    if "dispatches" not in record:
+        record["dispatches"] = []
 
     # 检查 in_progress 步骤是否实际完成
     updated = False
@@ -126,14 +175,16 @@ def main():
         if step.get("status") == "in_progress":
             if check_step_completed(step):
                 step["status"] = "completed"
-                step["completedAt"] = record.get("updatedAt", "")
+                step["completedAt"] = gmt8_now()
+                record["updatedAt"] = gmt8_now()
                 print(f"[完成] 步骤 {step['id']}: {step['name']}", flush=True)
                 updated = True
 
-    # 如果有更新，保存记录
-    if updated:
-        record["updatedAt"] = record.get("updatedAt", "")
-        save_task_record(task_path, record)
+                # 从 dispatches 中移除该步骤的待派发记录
+                record["dispatches"] = [
+                    d for d in record["dispatches"]
+                    if d.get("stepId") != step["id"]
+                ]
 
     # 找下一个待执行步骤
     next_step = get_next_pending_step(record)
@@ -143,38 +194,49 @@ def main():
         all_done = all(s.get("status") == "completed" for s in record.get("steps", []))
         if all_done:
             record["status"] = "completed"
+            record["completedAt"] = gmt8_now()
+            record["updatedAt"] = gmt8_now()
             print("[完成] 所有步骤执行完毕", flush=True)
-            save_task_record(task_path, record)
+            # 清理 dispatches
+            record["dispatches"] = []
+            updated = True
         else:
             print("[等待] 没有可执行的步骤（等待前置依赖）", flush=True)
-        sys.exit(0)
+    else:
+        # 有可执行的步骤，添加到 dispatches 数组
+        step_id = next_step["id"]
+        step_name = next_step["name"]
+        agent = next_step.get("agent", "")
 
-    step_id = next_step["id"]
-    step_name = next_step["name"]
-    agent = next_step["agent"]
-    task_msg = next_step.get("task", f"执行步骤 {step_id}: {step_name}")
+        # 检查是否已经在 dispatches 中
+        existing = any(d.get("stepId") == step_id for d in record["dispatches"])
+        if not existing:
+            dispatch_info = {
+                "stepId": step_id,
+                "stepName": step_name,
+                "agent": agent,
+                "task": next_step.get("task", f"执行步骤 {step_id}: {step_name}"),
+                "input": next_step.get("input", {}),
+                "output": next_step.get("output", {}),
+                "addedAt": gmt8_now()
+            }
+            record["dispatches"].append(dispatch_info)
+            print(f"[待派发] 步骤 {step_id}: {step_name}，Agent: {agent}", flush=True)
+            updated = True
 
-    print(f"[执行] 步骤 {step_id}: {step_name}，Agent: {agent}", flush=True)
+        # 更新当前步骤
+        record["currentStep"] = step_id
+        record["status"] = "in_progress"
+        record["updatedAt"] = gmt8_now()
 
-    # 更新状态为 in_progress
-    next_step["status"] = "in_progress"
-    record["currentStep"] = step_id
-    save_task_record(task_path, record)
+    if updated:
+        save_task_record(task_path, record)
 
-    # 打印 JSON 格式的派发信息供主Agent解析
-    # 使用特殊标记让主Agent能够识别并提取
-    print(f"\n=== AGENT_DISPATCH ===", flush=True)
-    dispatch_info = {
-        "agentId": agent,
-        "task": task_msg,
-        "stepId": step_id,
-        "stepName": step_name,
-        "input": next_step.get("input", {}),
-        "output": next_step.get("output", {}),
-        "taskRecord": str(task_path)
-    }
-    print(json.dumps(dispatch_info, ensure_ascii=False), flush=True)
-    print(f"=== END_DISPATCH ===", flush=True)
+    # 输出 dispatches 信息供主Agent解析
+    if record.get("dispatches"):
+        print(f"\n[派发] 待执行步骤数: {len(record['dispatches'])}", flush=True)
+        for d in record["dispatches"]:
+            print(f"  - stepId={d['stepId']}, agent={d['agent']}, task={d['task'][:50]}...", flush=True)
 
     sys.exit(0)
 
