@@ -1,0 +1,141 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://openclaw.ai/schemas/testcase-generate-workflow/task-record.json",
+  "title": "Task Record",
+  "description": "Schema for testcase-generate-workflow task tracking",
+  "type": "object",
+  "required": ["id", "name", "version", "createdAt", "updatedAt", "status", "context", "steps"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^task_tcg_\\d{8}_\\d{6}$",
+      "description": "Task ID, format: task_tcg_YYYYMMDD_HHMMSS"
+    },
+    "name": {
+      "type": "string",
+      "const": "测试用例生成工作流"
+    },
+    "version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "in_progress", "completed", "failed", "paused"]
+    },
+    "context": {
+      "type": "object",
+      "required": ["workspace", "inputDoc", "workDir"],
+      "properties": {
+        "workspace": {
+          "type": "string",
+          "description": "Base workspace path, e.g., ~/.openclaw/workspace"
+        },
+        "inputDoc": {
+          "type": "string",
+          "description": "Original input document path (.docx or .md)"
+        },
+        "workDir": {
+          "type": "string",
+          "description": "Task working directory: task_records/<task_id>/"
+        },
+        "userId": {
+          "type": "string",
+          "description": "User identifier (optional)"
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "agent", "skill", "dependsOn", "status", "task", "inputFiles", "outputFiles"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Step ID in format 'phase.substep' or 'phase.substep.branch' e.g., '1.1', '2.1.1', '3.2.3'"
+          },
+          "name": {
+            "type": "string",
+            "description": "Step name in Chinese"
+          },
+          "agent": {
+            "type": "string",
+            "enum": ["test-req-preprocessor", "test-requirement-analyst", "test-design-expert"]
+          },
+          "skill": {
+            "type": "string",
+            "description": "Skill name to invoke for this step"
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Array of step IDs that must complete before this step"
+          },
+          "branch": {
+            "type": ["integer", "null"],
+            "description": "Branch number for parallel execution (1 or 2), null for sequential steps"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "completed", "failed", "skipped"]
+          },
+          "task": {
+            "type": "string",
+            "description": "Task description for subagent"
+          },
+          "inputFiles": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Paths to input files"
+          },
+          "outputFiles": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Paths to output files"
+          },
+          "completedAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "startedAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "Error message if step failed"
+          },
+          "retryCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3,
+            "default": 0
+          },
+          "notes": {
+            "type": ["string", "null"]
+          }
+        }
+      }
+    },
+    "completionCriteria": {
+      "type": "object",
+      "properties": {
+        "finalOutputs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of required output files for completion",
+          "examples": [["logic_testcase_export.xlsx", "interface_testcase_export.xlsx"]]
+        }
+      }
+    }
+  }
+}
